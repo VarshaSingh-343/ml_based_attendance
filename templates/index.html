@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Facial Recognition Attendance</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="header">
+    <h1>Welcome to Smart Attendance System</h1>
+    <a href="{{ url_for('login') }}" class="admin-login">Admin Login</a>
+</div>
+
+<div class="main">
+    <img src="{{ url_for('static', filename='banner.jpg') }}" alt="Attendance Banner" class="banner-image">
+    
+    <p class="description">
+        This AI-powered facial recognition attendance system allows students to mark their attendance quickly, securely, and without any manual effort. Designed for accuracy and efficiency in classrooms or offices.
+    </p>
+
+    <button id="start-attendance-btn">Mark Attendance</button>
+    <div id="status-message" style="font-weight: bold; margin-top: 20px; color: green;"></div>
+
+
+    <script>
+        let polling = null;
+        let messageTimeout = null;
+        let lastMessage = "";
+    
+        function displayMessage(msg, type) {
+            const statusEl = document.getElementById("status-message");
+    
+            // Don't update if it's the same message again
+            if (msg === lastMessage) return;
+    
+            lastMessage = msg;
+            statusEl.textContent = msg;
+    
+            switch(type) {
+                case "success": statusEl.style.color = "green"; break;
+                case "warning": statusEl.style.color = "orange"; break;
+                case "error":   statusEl.style.color = "red"; break;
+                default:        statusEl.style.color = "black";
+            }
+    
+            if (messageTimeout) clearTimeout(messageTimeout);
+            messageTimeout = setTimeout(() => {
+                statusEl.textContent = "";
+                lastMessage = "";
+            }, 7000); 
+        }
+    
+        document.getElementById("start-attendance-btn").addEventListener("click", () => {
+            fetch("/start_recognition", { method: "POST" })
+                .then(response => response.json())
+                .then(data => {
+                    displayMessage(data.message?.text || "Recognition started", data.message?.type || "info");
+    
+                    if (!polling) {
+                        polling = setInterval(() => {
+                            fetch("/get_status")
+                                .then(res => res.json())
+                                .then(update => {
+                                    const newMessage = update.message?.text;
+                                    const type = update.message?.type || "info";
+    
+                                    // Only show new messages
+                                    if (newMessage && newMessage !== lastMessage) {
+                                        displayMessage(newMessage, type);
+                                    }
+                                });
+                        }, 2000);
+                    }
+                })
+                .catch(err => {
+                    console.error("Error:", err);
+                    displayMessage("❌ Something went wrong.", "error");
+                });
+        });
+    </script>
+            
+
+    
+</div>
+
+</body>
+</html>
