@@ -67,11 +67,16 @@ def log_attendance(conn, student):
             VALUES (?, ?, ?, ?, ?)
         """, (student['roll_no'], student['name'], student['course'], student['semester'], timestamp))
         conn.commit()
-        update_message(f"✅ Attendance marked for Roll No: {student['roll_no']}, Name: {student['name']}", "success")
+        message = f"✅ Attendance marked for {student['roll_no']} - {student['name']}"
+        update_message(message, "success")
         print(f"[LOGGED] {student['roll_no']} - {student['name']} at {timestamp}")
+        return message, "success"
     else:
-        update_message(f"⚠️ Already marked today: {student['roll_no']} - {student['name']}", "warning")
+        message = f"⚠️ Already marked today: {student['roll_no']} - {student['name']}"
+        update_message(message, "warning")
         print(f"[SKIPPED] Already marked today: {student['roll_no']} - {student['name']}")
+        return message, "warning"
+
 
 def recognize_faces():
     print("[INFO] Loading encodings from database...")
@@ -168,6 +173,7 @@ def recognize_faces():
 
     print("[INFO] Attendance session ended.")
 
+
 def recognize_from_frame(frame):
     known_encodings, metadata = load_encodings_from_db()
     ensure_attendance_log_table()
@@ -177,19 +183,43 @@ def recognize_from_frame(frame):
     face_locations = face_recognition.face_locations(rgb_frame)
     face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
-    for encoding in face_encodings:
-        matches = face_recognition.compare_faces(known_encodings, encoding)
+    response_faces = []
+    message_text = "No face detected"
+    message_type = "info"
+
+    for (top, right, bottom, left), encoding in zip(face_locations, face_encodings):
+        face_data = {
+            "box": [left, top, right - left, bottom - top],  # x, y, width, height
+            "recognized": False
+        }
+
+        matches = face_recognition.compare_faces(known_encodings, encoding, tolerance=0.5)
         face_distances = face_recognition.face_distance(known_encodings, encoding)
         best_match_index = np.argmin(face_distances)
 
         if matches[best_match_index]:
             student = metadata[best_match_index]
-            log_attendance(conn, student)
-            conn.close()
-            return f"Attendance marked for {student['name']}"
+            face_data.update({
+                "recognized": True,
+                "roll_no": student["roll_no"],
+                "name": student["name"]
+            })
+
+            message_text, message_type = log_attendance(conn, student)
+
+        else:
+            message_text = "❌ Face not recognized"
+            message_type = "error"
+
+        response_faces.append(face_data)
 
     conn.close()
-    return "Face not recognized"
+
+    return {
+        "text": message_text,
+        "type": message_type,
+        "faces": response_faces
+    }
 
 
 if __name__ == "__main__":

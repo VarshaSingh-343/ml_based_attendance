@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Your Dashboard</h1>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+    </div>
+<div class="dashboard-container">
+    
+    <h2>Attendance Records</h2>
+    
+    <div class="filters">
+        <div>
+            <label for="course-filter">Course:</label><br>
+            <select id="course-filter"></select>
+        </div>
+
+        <div>
+            <label for="date-filter">Date:</label><br>
+            <select id="date-filter"></select>
+        </div>
+
+        <div>
+            <label for="status-filter">Status:</label><br>
+            <select id="status-filter">
+                <option value="">--All--</option>
+                <option value="Marked">Marked</option>
+                <option value="Unmarked">Unmarked</option>
+            </select>
+        </div>
+
+        <div style="align-self: end; margin-left: 40px;">
+            <button onclick="loadAttendance()">View Attendance</button>
+        </div>
+    </div>
+
+    <table border="1" style="margin-top:20px;">
+    <thead>
+        <tr>
+        <th>Roll No</th>
+        <th>Name</th>
+        <th>Course</th>
+        <th>Date</th>
+        <th>Status</th>
+        </tr>
+    </thead>
+    <tbody id="attendance-table">
+    </tbody>
+    </table>
+
+    <script>
+    async function populateFilters() {
+        const res = await fetch('/admin/filters');
+        const data = await res.json();
+
+        const courseSelect = document.getElementById('course-filter');
+        courseSelect.innerHTML = '<option value="">--All--</option>';
+        data.courses.forEach(course => {
+        courseSelect.innerHTML += `<option value="${course}">${course}</option>`;
+        });
+
+        const dateSelect = document.getElementById('date-filter');
+        dateSelect.innerHTML = '<option value="">--All--</option>';
+        data.dates.forEach(date => {
+        dateSelect.innerHTML += `<option value="${date}">${date}</option>`;
+        });
+    }
+
+    async function loadAttendance() {
+        const course = document.getElementById('course-filter').value;
+        const date = document.getElementById('date-filter').value;
+        const status = document.getElementById('status-filter').value;
+
+        const res = await fetch('/admin/attendance', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ course, date, status })
+        });
+
+        const data = await res.json();
+        const tbody = document.getElementById('attendance-table');
+        tbody.innerHTML = "";
+
+        if (data.records.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='5'>No records found</td></tr>";
+        } else {
+        data.records.forEach(r => {
+            tbody.innerHTML += `
+            <tr>
+                <td>${r.roll_no}</td>
+                <td>${r.name}</td>
+                <td>${r.course}</td>
+                <td>${r.date}</td>
+                <td>${r.status}</td>
+            </tr>
+            `;
+        });
+        }
+    }
+
+    // Initialize filters on page load
+    window.onload = populateFilters;
+</script>
+
+
+</body>
+</html>

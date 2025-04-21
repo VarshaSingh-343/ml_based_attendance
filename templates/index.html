@@ -3,85 +3,213 @@
 <head>
     <title>Facial Recognition Attendance</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        
+
+    </style>
 </head>
 <body>
 
 <div class="header">
     <h1>Welcome to Smart Attendance System</h1>
-    <a href="{{ url_for('login') }}" class="admin-login">Admin Login</a>
+    <a href="#" class="admin-login">Admin Login</a>
+
 </div>
 
 <div class="main">
-    <img src="{{ url_for('static', filename='banner.jpg') }}" alt="Attendance Banner" class="banner-image">
+    <div class="system">
+        <img src="{{ url_for('static', filename='banner.jpg') }}" alt="Attendance Banner" class="banner-image">
     
-    <p class="description">
-        This AI-powered facial recognition attendance system allows students to mark their attendance quickly, securely, and without any manual effort. Designed for accuracy and efficiency in classrooms or offices.
-    </p>
+        <p class="description">
+            This AI-powered facial recognition attendance system allows students to mark their attendance quickly, securely, and without any manual effort. Designed for accuracy and efficiency in classrooms or offices.
+        </p>
+    </div>
+    
 
     <button id="start-attendance-btn">Mark Attendance</button>
+
     <div id="status-message" style="font-weight: bold; margin-top: 20px; color: green;"></div>
+
+    <!-- Webcam embed in page -->
+    <div style="position: relative; display: inline-block;">
+        <video id="webcam" autoplay muted style="width: 640px; height: 480px;"></video>
+        <canvas id="overlay" width="640" height="480" style="position: absolute; top: 0; left: 0;"></canvas>
+    </div>
 
 
     <script>
-        let polling = null;
         let messageTimeout = null;
         let lastMessage = "";
+        let video = document.getElementById('webcam');
+        let canvas = document.getElementById('overlay');
+        let context = canvas.getContext('2d');
+        let streamStarted = false;
+
+        //  stop webcam and key press for exit
+        let videoStream = null;
+        let frameCaptureInterval = null;
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'q' || e.key === 'Q') {
+                stopWebcam();
+            }
+        });
+
+        function stopWebcam() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+
+            if (frameCaptureInterval) {
+                clearInterval(frameCaptureInterval);
+                frameCaptureInterval = null;
+            }
+
+            // Hide video and canvas
+            video.style.display = 'none';
+            canvas.style.display = 'none';
+
+            streamStarted = false;
+            displayMessage("📴 Webcam stopped", "info");
+        }
+
     
         function displayMessage(msg, type) {
             const statusEl = document.getElementById("status-message");
     
-            // Don't update if it's the same message again
-            if (msg === lastMessage) return;
-    
+            if (msg === lastMessage) return; // Skip if message already shown
             lastMessage = msg;
             statusEl.textContent = msg;
     
-            switch(type) {
+            switch (type) {
                 case "success": statusEl.style.color = "green"; break;
                 case "warning": statusEl.style.color = "orange"; break;
-                case "error":   statusEl.style.color = "red"; break;
-                default:        statusEl.style.color = "black";
+                case "error": statusEl.style.color = "red"; break;
+                default: statusEl.style.color = "black";
             }
     
             if (messageTimeout) clearTimeout(messageTimeout);
             messageTimeout = setTimeout(() => {
                 statusEl.textContent = "";
                 lastMessage = "";
-            }, 7000); 
+            }, 7000);
         }
     
-        document.getElementById("start-attendance-btn").addEventListener("click", () => {
+        async function sendFrame() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            const ctx = tempCanvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+            const base64Image = tempCanvas.toDataURL('image/jpeg');
+    
+            const res = await fetch('/process_frame', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64Image })
+            });
+    
+            const data = await res.json();
+    
+            // Draw boxes
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+            //Draw "Press Q..." message
+            context.font = "18px Arial";
+            context.fillStyle = "skyblue";
+            context.fillText("-Press Q to exit webcam-", 10, 25);
+
+            if (data.faces) {
+                data.faces.forEach(face => {
+                    const [x, y, w, h] = face.box;
+                    context.strokeStyle = face.recognized ? "green" : "red";
+                    context.lineWidth = 2;
+                    context.strokeRect(x, y, w, h);
+    
+                    context.font = "16px Arial";
+                    context.fillStyle = face.recognized ? "green" : "red";
+                    const label = face.recognized ? `${face.roll_no} - ${face.name}` : "Unknown";
+                    context.fillText(label, x, y - 5);
+                });
+            }
+    
+            // Display status message
+            if (data.message && data.message.text && data.message.text !== lastMessage) {
+                displayMessage(data.message.text, data.message.type || "info");
+            }
+        }
+    
+        document.getElementById("start-attendance-btn").addEventListener("click", async () => {
             fetch("/start_recognition", { method: "POST" })
-                .then(response => response.json())
+                .then(res => res.json())
                 .then(data => {
                     displayMessage(data.message?.text || "Recognition started", data.message?.type || "info");
-    
-                    if (!polling) {
-                        polling = setInterval(() => {
-                            fetch("/get_status")
-                                .then(res => res.json())
-                                .then(update => {
-                                    const newMessage = update.message?.text;
-                                    const type = update.message?.type || "info";
-    
-                                    // Only show new messages
-                                    if (newMessage && newMessage !== lastMessage) {
-                                        displayMessage(newMessage, type);
-                                    }
-                                });
-                        }, 2000);
-                    }
-                })
-                .catch(err => {
-                    console.error("Error:", err);
-                    displayMessage("❌ Something went wrong.", "error");
                 });
-        });
-    </script>
-            
 
+            if (!streamStarted) {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = videoStream;
+                streamStarted = true;
+
+                // Start sending frames every 2 seconds
+                frameCaptureInterval = setInterval(sendFrame, 2000);
+            }
+        });
+
+    </script>
     
 </div>
+
+<!-- Admin Login Modal -->
+<div id="loginModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <h3>Admin Login</h3>
+      <input type="text" id="admin_id" placeholder="Admin ID"><br>
+      <input type="password" id="admin_password" placeholder="Password"><br>
+      <button onclick="submitLogin()">Login</button>
+      <p class="error-msg" id="loginError"></p>
+    </div>
+</div>
+  
+<!-- js to handle admin login modal -->
+<script>
+    const modal = document.getElementById("loginModal");
+
+    document.querySelector(".admin-login").addEventListener("click", (e) => {
+        e.preventDefault();
+        modal.style.display = "block";
+    });
+
+    function closeModal() {
+        modal.style.display = "none";
+        document.getElementById("loginError").textContent = "";
+    }
+
+    window.onclick = function(event) {
+        if (event.target == modal) closeModal();
+    }
+
+    async function submitLogin() {
+        const admin_id = document.getElementById("admin_id").value;
+        const password = document.getElementById("admin_password").value;
+
+        const res = await fetch("/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ admin_id, password })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = "/admin/dashboard";
+        } else {
+            document.getElementById("loginError").textContent = data.message;
+        }
+    }
+</script>
+
 
 </body>
 </html>
