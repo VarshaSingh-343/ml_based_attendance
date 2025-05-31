@@ -1,0 +1,37 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment files
+.env
+*.env
+
+# Python virtual environments
+venv/
+env/
+
+# Flask instance and config folders (if used)
+instance/
+config.py
+
+# SQLite database files
+*.sqlite3
+*.db
+
+# Pickle and encoded files
+*.pkl
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Ignore everything in images/
+data/images/*
+
+# But keep the placeholder file
+!data/images/.gitkeep
+
