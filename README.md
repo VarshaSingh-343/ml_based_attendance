@@ -38,6 +38,9 @@ The system includes both student and admin interfaces, attendance logs, filterin
 
 ## 🚀 Getting Started
 
-- Clone the repository:  
-  ```bash
-  git clone https://github.com/yourusername/Face-Recognition-Attendance-System.git
+- Clone the repository: git clone https://github.com/VarshaSingh-343/ml_based_attendance.git
+
+- Install dependencies: pip install -r requirements.txt
+- Add student images to the data/images/ folder
+- Run encoding script: python encode.py
+- Start the Flask server: python app.py
