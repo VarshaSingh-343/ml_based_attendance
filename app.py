@@ -1,8 +1,8 @@
-from flask import Flask, render_template, request, jsonify,  redirect, url_for, session
+from flask import Flask, render_template, request, jsonify,  redirect, url_for, session, Response
 import threading
 import cv2
 import numpy as np
-import base64, sqlite3
+import base64, sqlite3, csv, io
 from face_recognize import recognize_from_frame
 import message_store
 
@@ -211,6 +211,66 @@ def get_status():
     latest_message["type"] = ""
 
     return jsonify(response)
+
+
+# admin export attendance
+@app.route('/admin/export-attendance')
+def export_attendance():
+    course = request.args.get('course')
+    date = request.args.get('date')
+    status = request.args.get('status')
+
+    conn = sqlite3.connect('database/student_data.db')
+    cursor = conn.cursor()
+
+    # Step 1: Get all students filtered by course
+    student_query = "SELECT roll_no, name, course FROM student_details"
+    student_filters = []
+    params = []
+
+    if course:
+        student_filters.append("course = ?")
+        params.append(course)
+
+    if student_filters:
+        student_query += " WHERE " + " AND ".join(student_filters)
+
+    cursor.execute(student_query, params)
+    students = cursor.fetchall()
+
+    # Step 2: Get marked attendance roll_nos for the selected date
+    marked_rolls = set()
+    if date:
+        cursor.execute("SELECT roll_no FROM attendance_log WHERE DATE(timestamp) = ?", (date,))
+        marked_rolls = set(row[0] for row in cursor.fetchall())
+
+    # Step 3: Prepare CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Roll No', 'Name', 'Course', 'Date', 'Status'])
+
+    for roll_no, name, course in students:
+        present = roll_no in marked_rolls
+        record_status = "Marked" if present else "Unmarked"
+
+        if status == "Marked" and not present:
+            continue
+        if status == "Unmarked" and present:
+            continue
+
+        writer.writerow([roll_no, name, course, date if date else 'All', record_status])
+
+    output.seek(0)
+
+    conn.close()
+
+    return Response(
+        output,
+        mimetype='text/csv',
+        headers={
+            "Content-Disposition": f"attachment; filename=attendance_export.csv"
+        }
+    )
 
 
 

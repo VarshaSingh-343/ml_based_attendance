@@ -14,7 +14,7 @@
     </div>
 <div class="dashboard-container">
     
-    <h2>Attendance Records</h2>
+    <h2>Manage Attendance</h2>
     
     <div class="filters">
         <div>
@@ -37,8 +37,11 @@
         </div>
 
         <div style="align-self: end; margin-left: 40px;">
-            <button onclick="loadAttendance()">View Attendance</button>
+            <button onclick="loadAttendance()">View Attendance Records</button>
+            <button style="margin-left: 50px;" onclick="exportAttendance()">Export Attendance</button>
         </div>
+
+        
     </div>
 
     <table border="1" style="margin-top:20px;">
@@ -107,6 +110,21 @@
 
     // Initialize filters on page load
     window.onload = populateFilters;
+
+
+    function exportAttendance() {
+    const course = document.getElementById('course-filter').value;
+    const date = document.getElementById('date-filter').value;
+    const status = document.getElementById('status-filter').value;
+
+    const query = new URLSearchParams({
+        course,
+        date,
+        status
+    });
+
+    window.open(`/admin/export-attendance?${query.toString()}`, '_blank');
+}
 </script>
 
 
