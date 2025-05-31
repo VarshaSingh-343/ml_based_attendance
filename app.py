@@ -54,7 +54,9 @@ def view_attendance():
 
     if status == "Marked":
         query = """
-            SELECT s.roll_no, s.name, s.course, DATE(a.timestamp) as date
+            SELECT s.roll_no, s.name, s.course, 
+                   DATE(a.timestamp) as date,
+                   TIME(a.timestamp) as time
             FROM attendance_log a
             JOIN student_details s ON s.roll_no = a.roll_no
             WHERE 1=1
@@ -75,6 +77,7 @@ def view_attendance():
                 "name": row[1],
                 "course": row[2],
                 "date": row[3],
+                "time": row[4],
                 "status": "Marked"
             })
 
@@ -110,7 +113,9 @@ def view_attendance():
     else:
         # No filter, show all attendance log
         query = """
-            SELECT s.roll_no, s.name, s.course, DATE(a.timestamp) as date
+            SELECT s.roll_no, s.name, s.course, 
+                   DATE(a.timestamp) as date,
+                   TIME(a.timestamp) as time
             FROM attendance_log a
             JOIN student_details s ON s.roll_no = a.roll_no
         """
@@ -129,6 +134,7 @@ def view_attendance():
                 "name": row[1],
                 "course": row[2],
                 "date": row[3],
+                "time": row[4],
                 "status": "Marked"
             })
 
@@ -238,19 +244,23 @@ def export_attendance():
     cursor.execute(student_query, params)
     students = cursor.fetchall()
 
-    # Step 2: Get marked attendance roll_nos for the selected date
-    marked_rolls = set()
+    # Step 2: Get marked attendance with timestamps for the selected date
+    marked_attendance = {}
     if date:
-        cursor.execute("SELECT roll_no FROM attendance_log WHERE DATE(timestamp) = ?", (date,))
-        marked_rolls = set(row[0] for row in cursor.fetchall())
+        cursor.execute("""
+            SELECT roll_no, TIME(timestamp) as time 
+            FROM attendance_log 
+            WHERE DATE(timestamp) = ?
+        """, (date,))
+        marked_attendance = {row[0]: row[1] for row in cursor.fetchall()}
 
     # Step 3: Prepare CSV
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Roll No', 'Name', 'Course', 'Date', 'Status'])
+    writer.writerow(['Roll No', 'Name', 'Course', 'Date', 'Time', 'Status'])
 
     for roll_no, name, course in students:
-        present = roll_no in marked_rolls
+        present = roll_no in marked_attendance
         record_status = "Marked" if present else "Unmarked"
 
         if status == "Marked" and not present:
@@ -258,7 +268,14 @@ def export_attendance():
         if status == "Unmarked" and present:
             continue
 
-        writer.writerow([roll_no, name, course, date if date else 'All', record_status])
+        writer.writerow([
+            roll_no, 
+            name, 
+            course, 
+            date if date else 'All', 
+            marked_attendance.get(roll_no, '-'), 
+            record_status
+        ])
 
     output.seek(0)
 
